@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>画像分類実験</title>
+    <style>
+        /* 全体リセットと基本設定 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            overflow: hidden;
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        .screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+        .screen.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 { font-size: 24px; margin-bottom: 30px; }
+        .input-group { margin-bottom: 24px; text-align: left; }
+        .input-group label { display: block; font-size: 14px; margin-bottom: 8px; color: #666; }
+        input[type="text"] {
+            width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none;
+        }
+        .btn {
+            width: 100%; padding: 14px; font-size: 16px; font-weight: bold; color: #fff; background-color: #007aff; border: none; border-radius: 8px; cursor: pointer;
+        }
+        
+        /* 進捗バー */
+        .progress-container { position: absolute; top: 20px; width: 85%; max-width: 400px; text-align: center; z-index: 10; }
+        #progress-text { font-size: 14px; font-weight: bold; color: #666; display: block; margin-bottom: 6px; }
+        .progress-bar-bg { width: 100%; height: 6px; background-color: #e5e5ea; border-radius: 3px; overflow: hidden; }
+        #progress-bar-fill { width: 0%; height: 100%; background-color: #34c759; transition: width 0.3s ease; }
+        
+        /* カードエリア（ボタンの隙間を作るため少し上に配置） */
+        .card-container { position: relative; width: 85vw; height: 55vh; max-width: 360px; max-height: 450px; margin-top: 20px; }
+        .card {
+            position: absolute; width: 100%; height: 100%; background-color: #fff; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; cursor: grab; touch-action: none; display: flex; justify-content: center; align-items: center; transition: transform 0.1s ease-out;
+        }
+        .card.to-left { transform: translate(-200vw, 0px) rotate(-30deg) !important; transition: transform 0.4s ease-in !important; }
+        .card.to-right { transform: translate(200vw, 0px) rotate(30deg) !important; transition: transform 0.4s ease-in !important; }
+        
+        /* 【修正点】画像が切れないように全体を表示させる設定 */
+        .card img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; /* ここをcontainにすることで、縦横比を崩さず全体を表示します */
+            background-color: #fafafa; /* 画像の隙間を薄いグレーにして見やすくします */
+            pointer-events: none; 
+        }
+        
+        /* 【新機能】パソコン・スマホ兼用の操作ボタンエリア */
+        .action-buttons {
+            display: flex;
+            justify-content: space-between;
+            width: 85%;
+            max-width: 360px;
+            margin-top: 24px;
+            gap: 16px;
+            z-index: 10;
+        }
+        .action-btn {
+            flex: 1;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        .action-btn:active { transform: scale(0.95); }
+        .btn-not-emo { background-color: #e5e5ea; color: #333; }
+        .btn-emo { background-color: #ff2d55; color: #fff; } /* エモいは少し華やかな赤ピンクに */
+
+        /* ガイド表示 */
+        .guide-container { margin-top: 16px; display: flex; justify-content: space-between; width: 85%; max-width: 360px; font-size: 12px; color: #999; }
+        .sub-text { font-size: 14px; color: #666; margin-top: 12px; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 開始画面 -->
+    <div id="start-screen" class="screen active">
+        <div class="container">
+            <h1>画像分類実験</h1>
+            <div class="input-group">
+                <label for="participant-id">被験者IDを入力してください</label>
+                <input type="text" id="participant-id" placeholder="例: SUB001" autocomplete="off">
+            </div>
+            <button id="start-btn" class="btn">実験開始</button>
+        </div>
+    </div>
+
+    <!-- 2. 実験画面 -->
+    <div id="experiment-screen" class="screen">
+        <div class="progress-container">
+            <span id="progress-text">0 / 100</span>
+            <div class="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+        </div>
+        
+        <div class="card-container" id="card-container"></div>
+        
+        <!-- 【新機能】画面下の選択ボタン -->
+        <div class="action-buttons">
+            <button id="btn-not-emo" class="action-btn btn-not-emo">エモくない</button>
+            <button id="btn-emo" class="action-btn btn-emo">エモい</button>
+        </div>
+
+        <div class="guide-container">
+            <div>←キー または スワイプ</div>
+            <div>スワイプ または キー→</div>
+        </div>
+    </div>
+
+    <!-- 3. 終了画面 -->
+    <div id="end-screen" class="screen">
+        <div class="container">
+            <h1>実験終了</h1>
+            <p>ご協力ありがとうございました。</p>
+            <p class="sub-text">データは自動送信されました。</p>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 設定項目（URLの貼り付けを忘れないでね！）
+        // ==========================================
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwBX6Ovxzh9bt3LAcCgs-RjzvS7ANfAHzK84Q34gd6GIfOKyZ0bEHLPee659pA-iP2H/exec";
+        const TOTAL_IMAGES = 100;
+
+        let participantId = "";
+        let imageQueue = [];
+        let currentIndex = 0;
+        let startTime = 0;
+        let isAnimating = false;
+
+        const startScreen = document.getElementById("start-screen");
+        const experimentScreen = document.getElementById("experiment-screen");
+        const endScreen = document.getElementById("end-screen");
+        const startBtn = document.getElementById("start-btn");
+        const participantInput = document.getElementById("participant-id");
+        const cardContainer = document.getElementById("card-container");
+        const progressText = document.getElementById("progress-text");
+        const progressBarFill = document.getElementById("progress-bar-fill");
+        
+        // ボタン要素の取得
+        const btnNotEmo = document.getElementById("btn-not-emo");
+        const btnEmo = document.getElementById("btn-emo");
+
+        window.addEventListener("DOMContentLoaded", () => {
+            document.addEventListener("contextmenu", e => e.preventDefault());
+            document.addEventListener("dragstart", e => e.preventDefault());
+
+            if (localStorage.getItem("exp_participantId")) {
+                participantId = localStorage.getItem("exp_participantId");
+                imageQueue = JSON.parse(localStorage.getItem("exp_imageQueue"));
+                currentIndex = parseInt(localStorage.getItem("exp_currentIndex"), 10);
+                
+                if (currentIndex < imageQueue.length) {
+                    startScreen.classList.remove("active");
+                    experimentScreen.classList.add("active");
+                    updateProgress();
+                    createCard(imageQueue[currentIndex]);
+                    preloadNextImages();
+                    startTime = performance.now();
+                } else {
+                    clearLocalStorage();
+                }
+            }
+        });
+
+        startBtn.addEventListener("click", () => {
+            const idValue = participantInput.value.trim();
+            if (!idValue) { alert("被験者IDを入力してください。"); return; }
+            participantId = idValue;
+
+            imageQueue = [];
+            for (let i = 1; i <= TOTAL_IMAGES; i++) {
+                const numStr = String(i).padStart(3, "0");
+                imageQueue.push(`img${numStr}.jpg`);
+            }
+            shuffleArray(imageQueue);
+            currentIndex = 0;
+            saveToLocalStorage();
+
+            startScreen.classList.remove("active");
+            experimentScreen.classList.add("active");
+            updateProgress();
+            createCard(imageQueue[currentIndex]);
+            preloadNextImages();
+            startTime = performance.now();
+        });
+
+        function createCard(imageName) {
+            cardContainer.innerHTML = "";
+            const card = document.createElement("div");
+            card.classList.add("card");
+            const img = document.createElement("img");
+            img.src = `${imageName}`;
+            img.alt = "実験画像";
+            card.appendChild(img);
+            cardContainer.appendChild(card);
+
+            let startX = 0;
+            let currentX = 0;
+            const threshold = 120;
+
+            card.addEventListener("touchstart", (e) => { if (isAnimating) return; startX = e.touches[0].clientX; });
+            card.addEventListener("touchmove", (e) => {
+                if (isAnimating) return;
+                currentX = e.touches[0].clientX;
+                const deltaX = currentX - startX;
+                card.style.transform = `translate(${deltaX}px, 0px) rotate(${deltaX * 0.05}deg)`;
+            });
+            card.addEventListener("touchend", () => {
+                if (isAnimating) return;
+                const deltaX = currentX - startX;
+                if (Math.abs(deltaX) > threshold && currentX !== 0) {
+                    handleChoice(deltaX > 0 ? "right" : "left", card);
+                } else {
+                    card.style.transform = "translate(0px, 0px) rotate(0deg)";
+                }
+                startX = 0; currentX = 0;
+            });
+        }
+
+        // 【新機能】画面下のボタンを押したときの動作設定
+        btnNotEmo.addEventListener("click", () => {
+            if (isAnimating) return;
+            const card = document.querySelector(".card");
+            if (card) handleChoice("left", card);
+        });
+
+        btnEmo.addEventListener("click", () => {
+            if (isAnimating) return;
+            const card = document.querySelector(".card");
+            if (card) handleChoice("right", card);
+        });
+
+        // PC用：キーボード矢印キー操作
+        document.addEventListener("keydown", (e) => {
+            if (!experimentScreen.classList.contains("active") || isAnimating) return;
+            const card = document.querySelector(".card");
+            if (!card) return;
+            if (e.key === "ArrowRight") handleChoice("right", card);
+            if (e.key === "ArrowLeft") handleChoice("left", card);
+        });
+
+        function handleChoice(direction, cardElement) {
+            isAnimating = true;
+            const reactionTime = Math.round(performance.now() - startTime);
+            const imageName = imageQueue[currentIndex];
+            const result = (direction === "right") ? "emo" : "not_emo";
+
+            if (direction === "right") cardElement.classList.add("to-right");
+            else cardElement.classList.add("to-left");
+
+            sendDataToGAS({
+                participant_id: participantId,
+                image_name: imageName,
+                result: result,
+                reaction_time: reactionTime,
+                timestamp: new Date().toISOString()
+            });
+
+            setTimeout(() => {
+                currentIndex++;
+                saveToLocalStorage();
+                updateProgress();
+
+                if (currentIndex < imageQueue.length) {
+                    createCard(imageQueue[currentIndex]);
+                    preloadNextImages();
+                    isAnimating = false;
+                    startTime = performance.now();
+                } else {
+                    clearLocalStorage();
+                    experimentScreen.classList.remove("active");
+                    endScreen.classList.add("active");
+                    isAnimating = false;
+                }
+            }, 400);
+        }
+
+        function sendDataToGAS(data) {
+            fetch(GAS_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) })
+            .catch(err => console.error(err));
+        }
+
+        function updateProgress() {
+            progressText.innerText = `${currentIndex} / ${imageQueue.length}`;
+            progressBarFill.style.width = `${(currentIndex / imageQueue.length) * 100}%`;
+        }
+        function saveToLocalStorage() {
+            localStorage.setItem("exp_participantId", participantId);
+            localStorage.setItem("exp_imageQueue", JSON.stringify(imageQueue));
+            localStorage.setItem("exp_currentIndex", currentIndex.toString());
+        }
+        function clearLocalStorage() {
+            localStorage.removeItem("exp_participantId");
+            localStorage.removeItem("exp_imageQueue");
+            localStorage.removeItem("exp_currentIndex");
+        }
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        function preloadNextImages() {
+            for (let i = 1; i <= 3; i++) {
+                const nextIndex = currentIndex + i;
+                if (nextIndex < imageQueue.length) {
+                    const img = new Image();
+                    img.src = `${imageQueue[nextIndex]}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
